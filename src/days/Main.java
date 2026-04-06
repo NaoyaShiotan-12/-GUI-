@@ -18,17 +18,28 @@ import javax.swing.JTextField;
 public class Main {
 	//12-1.日付(String)をキーにしてその日のリストを保存する地図（Map）
 	private static java.util.Map<String, DefaultListModel<String>> allData = new java.util.HashMap<>();
-
+	private static java.util.List<NoteData> notes = new java.util.ArrayList<>();
 	private static int currentYear = 2026;
 	private static int currentMonth = 4;
 	private static JPanel calendarPanel = new JPanel(new java.awt.GridLayout(0, 7)); // ここで作っておく
-    private static JLabel monthLabel = new JLabel("", JLabel.CENTER); // 年月表示用
+	private static JLabel monthLabel = new JLabel("", JLabel.CENTER); // 年月表示用
+
 	public static void main(String[] args) {
+		loadData();
 		//1-1. JFrame (窓)を作成
 		JFrame frame = new JFrame("デイリープランナー");
 
 		//1-2.閉じるボタンを押したときにプログラムを終了させる設定
-		frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+		frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+
+		frame.addWindowListener(new java.awt.event.WindowAdapter() {
+			@Override
+			public void windowClosing(java.awt.event.WindowEvent e) {
+				saveData(); // ★ここ重要
+				frame.dispose();
+
+			}
+		});
 
 		//1-3.サイズ（幅450，高さ400）を決める
 		frame.setSize(450, 400);
@@ -64,8 +75,6 @@ public class Main {
 		inputPanel.add(new JLabel("分"));
 		inputPanel.add(taskField);
 		inputPanel.add(addButton);
-	
-		
 
 		//2-5.最後に、このパネルをフレームの「上に」配置する
 		frame.add(inputPanel, BorderLayout.NORTH);
@@ -106,7 +115,7 @@ public class Main {
 					//　時　分　予定　という形式でリストに追加
 
 					currentModel.addElement(hour + "時" + minute + "分-" + task);
-
+					saveData();
 					//入力欄をクリア
 					hourField.setText("");
 					minuteField.setText("");
@@ -138,6 +147,7 @@ public class Main {
 					if (selectedIndex != -1) {
 						//データモデルからその行を削除
 						currentModel.remove(selectedIndex);
+						saveData();
 					} else {
 						//何も選んでいない状態で押されたら案内を出す
 						JOptionPane.showMessageDialog(frame, "削除する予定を選んでください");
@@ -159,26 +169,26 @@ public class Main {
 		stickButton.addActionListener(new java.awt.event.ActionListener() {
 			@Override
 			public void actionPerformed(java.awt.event.ActionEvent e) {
-		        // ★ 複数選択された項目をすべて取得する
-		        java.util.List<String> selectedValues = taskList.getSelectedValuesList();
-		        String currentDay = dateLabel.getText();
+				// ★ 複数選択された項目をすべて取得する
+				java.util.List<String> selectedValues = taskList.getSelectedValuesList();
+				String currentDay = dateLabel.getText();
 
-		        if (!selectedValues.isEmpty()) {
-		            StringBuilder sb = new StringBuilder();
-		            sb.append("日付: ").append(currentDay).append("\n");
-		            sb.append("予定:\n");
-		            // 選択された項目をループでつなげる
-		            for (String value : selectedValues) {
-		                sb.append(" ・ ").append(value).append("\n");
-		            }
-		            sb.append("----------\n");
+				if (!selectedValues.isEmpty()) {
+					StringBuilder sb = new StringBuilder();
+					sb.append("日付: ").append(currentDay).append("\n");
+					sb.append("予定:\n");
+					// 選択された項目をループでつなげる
+					for (String value : selectedValues) {
+						sb.append(" ・ ").append(value).append("\n");
+					}
+					sb.append("----------\n");
 
-		            String id = String.valueOf(System.currentTimeMillis());
-		            new StickyNote(sb.toString(), id, currentDay); // 引数に日付を追加
-		        } else {
-		            JOptionPane.showMessageDialog(frame, "リストから項目を選択してください");
-		        }
-		    }
+					String id = String.valueOf(System.currentTimeMillis());
+					new StickyNote(sb.toString(), id, currentDay); // 引数に日付を追加
+				} else {
+					JOptionPane.showMessageDialog(frame, "リストから項目を選択してください");
+				}
+			}
 		});
 
 		// --- 新しいカレンダー生成処理 (月移動対応) ---
@@ -198,59 +208,77 @@ public class Main {
 
 		// 7-2. カレンダーを更新する命令 (Runnable)
 		Runnable updateCalendar = () -> {
-		    calendarPanel.removeAll(); // 一旦クリア
-		    monthLabel.setText(currentYear + "年 " + currentMonth + "月");
+			calendarPanel.removeAll(); // 一旦クリア
+			monthLabel.setText(currentYear + "年 " + currentMonth + "月");
 
-		    // 曜日の見出しを追加
-		    String[] dayNames = { "日", "月", "火", "水", "木", "金", "土" };
-		    for (String d : dayNames) calendarPanel.add(new JLabel(d, JLabel.CENTER));
+			// 曜日の見出しを追加
+			String[] dayNames = { "日", "月", "火", "水", "木", "金", "土" };
+			for (String d : dayNames)
+				calendarPanel.add(new JLabel(d, JLabel.CENTER));
 
-		    // その月の「1日」の曜日と「末日」を計算
-		    java.util.Calendar cal = java.util.Calendar.getInstance();
-		    cal.set(currentYear, currentMonth - 1, 1);
-		    int startDay = cal.get(java.util.Calendar.DAY_OF_WEEK);
-		    int lastDay = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH);
+			// その月の「1日」の曜日と「末日」を計算
+			java.util.Calendar cal = java.util.Calendar.getInstance();
+			cal.set(currentYear, currentMonth - 1, 1);
+			int startDay = cal.get(java.util.Calendar.DAY_OF_WEEK);
+			int lastDay = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH);
 
-		    // 1日が始まるまでの空白
-		    for (int i = 1; i < startDay; i++) calendarPanel.add(new JLabel(""));
+			// 1日が始まるまでの空白
+			for (int i = 1; i < startDay; i++)
+				calendarPanel.add(new JLabel(""));
 
-		    // 日付ボタンを作成
-		    for (int i = 1; i <= lastDay; i++) {
-		        String dStr = (i < 10) ? "0" + i : String.valueOf(i);
-		        JButton dayButton = new JButton(dStr);
-		        
-		        dayButton.addActionListener(e -> {
-		            String mStr = (currentMonth < 10) ? "0" + currentMonth : "" + currentMonth;
-		            String fullDate = currentYear + "/" + mStr + "/" + dStr;
-		            dateLabel.setText("【" + fullDate + "】");
-		            
-		            // Mapからデータを切り替える
-		            if (!allData.containsKey(fullDate)) {
-		                allData.put(fullDate, new DefaultListModel<>());
-		            }
-		            taskList.setModel(allData.get(fullDate));
-		        });
-		        calendarPanel.add(dayButton);
-		    }
-		    calendarPanel.revalidate();
-		    calendarPanel.repaint();
+			// 日付ボタンを作成
+			for (int i = 1; i <= lastDay; i++) {
+			    String dStr = (i < 10) ? "0" + i : String.valueOf(i);
+
+			    String mStr = (currentMonth < 10) ? "0" + currentMonth : "" + currentMonth;
+			    String fullDate = currentYear + "/" + mStr + "/" + dStr;
+
+			    JButton dayButton = new JButton(dStr);
+
+			    // ★ 予定がある日をチェック
+			    boolean hasData = allData.containsKey(fullDate) && allData.get(fullDate).size() > 0;
+
+			    // ★ ここで文字色を赤にする
+			    if (hasData) {
+			        dayButton.setForeground(java.awt.Color.RED);
+			    }
+
+			    dayButton.addActionListener(e -> {
+			        String fullDateClicked = currentYear + "/" + mStr + "/" + dStr;
+			        dateLabel.setText("【" + fullDateClicked + "】");
+
+			        if (!allData.containsKey(fullDateClicked)) {
+			            allData.put(fullDateClicked, new DefaultListModel<>());
+			        }
+			        taskList.setModel(allData.get(fullDateClicked));
+			    });
+
+			    calendarPanel.add(dayButton);
+			}
+			calendarPanel.revalidate();
+			calendarPanel.repaint();
 		};
 
 		// 7-3. 移動ボタンの動作設定
 		prevBtn.addActionListener(e -> {
-		    currentMonth--;
-		    if (currentMonth < 1) { currentMonth = 12; currentYear--; }
-		    updateCalendar.run();
+			currentMonth--;
+			if (currentMonth < 1) {
+				currentMonth = 12;
+				currentYear--;
+			}
+			updateCalendar.run();
 		});
 		nextBtn.addActionListener(e -> {
-		    currentMonth++;
-		    if (currentMonth > 12) { currentMonth = 1; currentYear++; }
-		    updateCalendar.run();
+			currentMonth++;
+			if (currentMonth > 12) {
+				currentMonth = 1;
+				currentYear++;
+			}
+			updateCalendar.run();
 		});
 
 		// 最初に一度実行して表示
 		updateCalendar.run();
-
 
 		//8-1.一番上にカレンダーをスクロールできる箱に配置
 		JScrollPane calendarScroll = new JScrollPane(fullCalendarPanel);
@@ -282,14 +310,15 @@ public class Main {
 				super.paintComponent(g);
 				java.awt.Graphics2D g2 = (java.awt.Graphics2D) g;
 				// アンチエイリアス（線を綺麗にする設定）
-				g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-				
+				g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+						java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+
 				// 左上に「めくり角」を描画
 				g2.setColor(new java.awt.Color(180, 180, 180, 200)); // 少し濃いめのグレー
 				int[] x = { 0, fSize[0], 0 };
 				int[] y = { 0, 0, fSize[0] };
 				g2.fillPolygon(x, y, 3);
-				
+
 				// 縁取り
 				g2.setColor(java.awt.Color.GRAY);
 				g2.drawPolygon(x, y, 3);
@@ -331,13 +360,16 @@ public class Main {
 						String h = hourField.getText();
 						String m = minuteField.getText();
 						sb.append("予定: ").append(h).append("時").append(m).append("分 - ").append(task).append("\n");
-						
+
 						// 入力をクリア
-						taskField.setText(""); hourField.setText(""); minuteField.setText("");
+						taskField.setText("");
+						hourField.setText("");
+						minuteField.setText("");
 					} else {
 						// リスト選択を使う場合
 						sb.append("予定一覧:\n");
-						for (String s : selected) sb.append(" ・ ").append(s).append("\n");
+						for (String s : selected)
+							sb.append(" ・ ").append(s).append("\n");
 					}
 
 					// 付箋を作成
@@ -349,23 +381,68 @@ public class Main {
 			}
 		});
 
-
-
 		glassPane.setOpaque(false);
 		frame.setGlassPane(glassPane);
 		glassPane.setVisible(true);
 
-
-
-		
 		//1-5.最後に「表示しろ！」と命令する（これがないと映りません）
 		frame.setVisible(true);
-			
-		
 
 	}
-	
-	
+
+	private static void saveData() {
+
+		try {
+			java.io.File dir = new java.io.File("data");
+			if (!dir.exists()) {
+				dir.mkdir(); // フォルダ作成
+			}
+
+			try (java.io.ObjectOutputStream out = new java.io.ObjectOutputStream(
+					new java.io.FileOutputStream("data/schedule.dat"))) {
+
+				java.util.Map<String, java.util.List<String>> simpleMap = new java.util.HashMap<>();
+
+				for (String key : allData.keySet()) {
+					DefaultListModel<String> model = allData.get(key);
+					java.util.List<String> list = new java.util.ArrayList<>();
+
+					for (int i = 0; i < model.size(); i++) {
+						list.add(model.get(i));
+					}
+					simpleMap.put(key, list);
+				}
+
+				out.writeObject(simpleMap);
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private static void loadData() {
+		try (java.io.ObjectInputStream in = new java.io.ObjectInputStream(
+				new java.io.FileInputStream("data/schedule.dat"))) {
+
+			java.util.Map<String, java.util.List<String>> simpleMap = (java.util.Map<String, java.util.List<String>>) in
+					.readObject();
+
+			allData = new java.util.HashMap<>();
+
+			for (String key : simpleMap.keySet()) {
+				DefaultListModel<String> model = new DefaultListModel<>();
+				for (String item : simpleMap.get(key)) {
+					model.addElement(item);
+				}
+				allData.put(key, model);
+			}
+
+		} catch (Exception e) {
+			allData = new java.util.HashMap<>();
+		}
+	}
 
 }
 
@@ -379,8 +456,8 @@ class StickyNote extends javax.swing.JFrame {
 		this.fileName = "note_" + id + ".txt";
 		this.textArea = new javax.swing.JTextPane(); // 入力欄を作成
 		this.textArea.setText(content);
-		
-		setUndecorated(true); 
+
+		setUndecorated(true);
 		setSize(250, 250);
 		setAlwaysOnTop(true);
 		setDefaultCloseOperation(javax.swing.JFrame.DISPOSE_ON_CLOSE);
@@ -401,7 +478,10 @@ class StickyNote extends javax.swing.JFrame {
 
 		// 保存して閉じるボタン
 		javax.swing.JMenuItem closeItem = new javax.swing.JMenuItem("保存して付箋を閉じる");
-		closeItem.addActionListener(ev -> { saveTofile(); dispose(); });
+		closeItem.addActionListener(ev -> {
+			saveTofile();
+			dispose();
+		});
 		popup.addSeparator();
 		popup.add(closeItem);
 
@@ -412,18 +492,24 @@ class StickyNote extends javax.swing.JFrame {
 		java.awt.Color bgColor = new java.awt.Color(255, 255, 180);
 		String iconPath = "";
 		if (dateLabelText.contains("/03/") || dateLabelText.contains("/04/") || dateLabelText.contains("/05/")) {
-			bgColor = new java.awt.Color(255, 220, 230); iconPath = "/images/spring.jpg";
+			bgColor = new java.awt.Color(255, 220, 230);
+			iconPath = "/images/spring.jpg";
 		} else if (dateLabelText.contains("/06/") || dateLabelText.contains("/07/") || dateLabelText.contains("/08/")) {
-			bgColor = new java.awt.Color(220, 240, 255); iconPath = "/images/summer.jpg";
+			bgColor = new java.awt.Color(220, 240, 255);
+			iconPath = "/images/summer.jpg";
 		} else if (dateLabelText.contains("/09/") || dateLabelText.contains("/10/") || dateLabelText.contains("/11/")) {
-			bgColor = new java.awt.Color(255, 230, 220); iconPath = "/images/autumn.jpg";
+			bgColor = new java.awt.Color(255, 230, 220);
+			iconPath = "/images/autumn.jpg";
 		} else {
-			bgColor = new java.awt.Color(245, 235, 230); iconPath = "/images/winter.jpg";
+			bgColor = new java.awt.Color(245, 235, 230);
+			iconPath = "/images/winter.jpg";
 		}
 		try {
 			java.net.URL imgURL = getClass().getResource(iconPath);
-			if (imgURL != null) bgImage = new javax.swing.ImageIcon(imgURL).getImage();
-		} catch (Exception e) {}
+			if (imgURL != null)
+				bgImage = new javax.swing.ImageIcon(imgURL).getImage();
+		} catch (Exception e) {
+		}
 
 		final java.awt.Color finalBgColor = bgColor;
 		javax.swing.JPanel mainPanel = new javax.swing.JPanel(new java.awt.BorderLayout()) {
@@ -432,17 +518,24 @@ class StickyNote extends javax.swing.JFrame {
 				super.paintComponent(g);
 				g.setColor(finalBgColor);
 				g.fillRect(0, 0, getWidth(), getHeight());
-				if (bgImage != null) g.drawImage(bgImage, getWidth()-90, getHeight()-90, 80, 80, this);
+				if (bgImage != null)
+					g.drawImage(bgImage, getWidth() - 90, getHeight() - 90, 80, 80, this);
 			}
 		};
 
 		textArea.setOpaque(false);
 		javax.swing.JScrollPane sp = new javax.swing.JScrollPane(textArea);
-		sp.setOpaque(false); sp.getViewport().setOpaque(false); sp.setBorder(null);
+		sp.setOpaque(false);
+		sp.getViewport().setOpaque(false);
+		sp.setBorder(null);
 
 		var adapter = new java.awt.event.MouseAdapter() {
 			private java.awt.Point origin;
-			public void mousePressed(java.awt.event.MouseEvent e) { origin = e.getPoint(); }
+
+			public void mousePressed(java.awt.event.MouseEvent e) {
+				origin = e.getPoint();
+			}
+
 			public void mouseDragged(java.awt.event.MouseEvent e) {
 				java.awt.Point p = getLocation();
 				setLocation(p.x + e.getX() - origin.x, p.y + e.getY() - origin.y);
@@ -465,13 +558,28 @@ class StickyNote extends javax.swing.JFrame {
 		javax.swing.text.StyleConstants.setBold(attr, bold);
 		try {
 			doc.insertString(0, text, attr);
-		} catch (Exception e) { e.printStackTrace(); }
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	public void saveTofile() {
 		try (java.io.PrintWriter out = new java.io.PrintWriter(new java.io.FileWriter(fileName))) {
 			out.print(textArea.getText());
-		} catch (java.io.IOException e) { e.printStackTrace(); }
+		} catch (java.io.IOException e) {
+			e.printStackTrace();
+		}
 	}
 }
 
+class NoteData implements java.io.Serializable {
+	String text;
+	int x;
+	int y;
+
+	public NoteData(String text, int x, int y) {
+		this.text = text;
+		this.x = x;
+		this.y = y;
+	}
+}
